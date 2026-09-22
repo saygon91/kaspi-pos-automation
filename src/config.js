@@ -5,13 +5,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { statePath } from './state-dir.js';
+
 const ROOT_DIR = path.resolve(__dirname, '..');
 
 export const PORT = process.env.PORT || 3000;
 
 // ─── ECDSA P-256 keypair (persisted to keypair.json) ───
 
-const KEYPAIR_FILE = path.join(ROOT_DIR, 'keypair.json');
+const KEYPAIR_FILE = statePath('keypair.json');
 
 let ecKeyPair;
 if (fs.existsSync(KEYPAIR_FILE)) {
@@ -42,7 +44,7 @@ const pkTagHash = crypto.createHash('md5').update(pkB64).digest('hex');
 
 // ─── Device identity (persisted to device.json) ───
 
-const DEVICE_FILE = path.join(ROOT_DIR, 'device.json');
+const DEVICE_FILE = statePath('device.json');
 
 let deviceId, installId, pinHash;
 if (fs.existsSync(DEVICE_FILE)) {

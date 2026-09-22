@@ -8,9 +8,10 @@ import { signedQrPayHeaders } from './helpers.js';
 import { decryptSecret } from './crypto.js';
 import { getWebhooksByEvent } from './webhookStore.js';
 import { logger } from './logger.js';
+import { statePath } from './state-dir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TRACKED_FILE = path.join(__dirname, '..', 'tracked-payments.json');
+const TRACKED_FILE = statePath('tracked-payments.json');
 
 // ─── Tracked payments ───
 
@@ -45,7 +46,7 @@ const loadTracked = () => {
 
 // ─── Pending retries (persisted) ───
 
-const RETRY_FILE = path.join(__dirname, '..', 'webhook-retries.json');
+const RETRY_FILE = statePath('webhook-retries.json');
 let pendingRetries = [];
 
 const saveRetries = () => {
