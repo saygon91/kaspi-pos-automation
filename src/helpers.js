@@ -45,15 +45,76 @@ export const extractUserToken = (resp) => {
 
 // ─── Logged fetch wrapper ───
 
+/* ── Логи исходящих вызовов Kaspi ────────────────────────────────────────
+   Раньше сюда сваливались заголовки целиком (Cookie, X-Sign, X-Kb-TokenSn),
+   тела запросов (номер телефона, код из SMS, подписанные payload-ы) и ответы
+   с tokenSN и vtokenSecret. Всё это оседало в `docker logs` открытым текстом:
+   кто дотянулся до логов — получил живые сессии мерчантов.
+
+   При этом именно по этим логам ищутся причины сбоев онбординга, поэтому
+   диагностика оставлена: шаг, код экрана и текст ошибки Kaspi не секретны.
+
+   KASPI_LOG=meta (по умолчанию) — метод, адрес, статус и разбор ответа.
+   KASPI_LOG=full — то же плюс тела и заголовки, но с вырезанными секретами.
+   KASPI_LOG=off  — молчать.                                              */
+
+const LOG_MODE = (process.env.KASPI_LOG || 'meta').toLowerCase();
+
+const SECRET_HEADERS = new Set([
+  'cookie', 'set-cookie', 'authorization',
+  'x-kb-tokensn', 'x-kb-tokensnmac', 'x-sign', 'x-su', 'x-pktag',
+]);
+
+// Ключи, значения которых нельзя печатать ни при каких настройках.
+const SECRET_KEY = /^(otp|userotp|tokensn|vtokensecret|secret|sign|signed|pinhash|x509|pk|usertoken|password|guard)$/i;
+
+const maskPhone = (v) =>
+  typeof v === 'string' && /^\+?\d{10,}$/.test(v) ? v.slice(0, 4) + '****' + v.slice(-2) : v;
+
+function redact(value, key) {
+  if (key && SECRET_KEY.test(key)) return '«скрыто»';
+  if (Array.isArray(value)) return value.map((v) => redact(v));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = redact(v, k);
+    return out;
+  }
+  if (key && /phone/i.test(key)) return maskPhone(value);
+  return value;
+}
+
+function redactHeaders(headers) {
+  const out = {};
+  for (const [k, v] of Object.entries(headers || {})) {
+    out[k] = SECRET_HEADERS.has(k.toLowerCase()) ? '«скрыто»' : v;
+  }
+  return out;
+}
+
+/** Короткий разбор ответа Kaspi: то, по чему ищут причину сбоя. */
+function summarize(body) {
+  if (!body || typeof body !== 'object') return null;
+  const bits = [];
+  if (body.meta?.sn) bits.push('шаг=' + body.meta.sn);
+  if (body.view?.code) bits.push('экран=' + body.view.code);
+  if (body.data?.type) bits.push('тип=' + body.data.type);
+  if (body.error?.code) bits.push('ошибка=' + body.error.code);
+  if (body.error?.desc) bits.push('текст="' + body.error.desc + '"');
+  if (body.success !== undefined) bits.push('success=' + body.success);
+  return bits.length ? bits.join(' · ') : null;
+}
+
 export const loggedFetch = async (url, options = {}) => {
   const method = (options.method || 'GET').toUpperCase();
-  console.log(`\n>>> ${method} ${url}`);
-  if (options.headers) console.log('>>> Headers:', JSON.stringify(options.headers, null, 2));
-  if (options.body) {
-    try {
-      console.log('>>> Body:', JSON.parse(options.body));
-    } catch {
-      console.log('>>> Body:', options.body);
+  const quiet = LOG_MODE === 'off';
+
+  if (!quiet) console.log(`\n>>> ${method} ${url}`);
+  if (LOG_MODE === 'full') {
+    if (options.headers) console.log('>>> Headers:', JSON.stringify(redactHeaders(options.headers), null, 2));
+    if (options.body) {
+      let parsed;
+      try { parsed = redact(JSON.parse(options.body)); } catch { parsed = '«нечитаемое тело»'; }
+      console.log('>>> Body:', JSON.stringify(parsed, null, 2));
     }
   }
 
@@ -69,10 +130,20 @@ export const loggedFetch = async (url, options = {}) => {
       body = '[unreadable]';
     }
   }
-  console.log(`<<< ${resp.status} ${resp.statusText}`);
-  console.log('<<< Response:', typeof body === 'object' ? JSON.stringify(body, null, 2) : body);
+
+  if (!quiet) {
+    console.log(`<<< ${resp.status} ${resp.statusText}`);
+    const short = summarize(body);
+    if (short) console.log('<<<', short);
+    if (LOG_MODE === 'full') {
+      const safe = typeof body === 'object' ? JSON.stringify(redact(body), null, 2) : body;
+      console.log('<<< Response:', safe);
+    }
+  }
   return resp;
 };
+
+export const __redactForTests = { redact, redactHeaders, summarize };
 
 // ─── Signed QR-pay headers (session passed as parameter) ───
 
