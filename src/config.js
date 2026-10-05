@@ -82,9 +82,14 @@ export const KASPI_QRPAY_URL = 'https://qrpay.kaspi.kz';
 // Defaults match a known-good Kaspi Pay client. Override via .env if needed.
 // ⚠️ The Kaspi API validates these parameters and may reject unknown values.
 
+// Kaspi отсекает старые сборки: на шаге входа отвечает `OldVersionToUpdate`
+// («Обновите приложение, чтобы войти»). 05.10.2026 порог был 1110 — сборка
+// 1107 перестала пускать с ~22.09. Проверяется именно номер сборки, строка
+// версии — нет. Сборка взята с запасом над порогом; настоящий номер сборки
+// Kaspi Pay неизвестен. Поднимать через APP_BUILD в окружении, без кода.
 export const APP = {
-  version: process.env.APP_VERSION || '4.112.1',
-  build: process.env.APP_BUILD || '1107',
+  version: process.env.APP_VERSION || '26.0921',
+  build: process.env.APP_BUILD || '1120',
   platform: process.env.APP_PLATFORM || 'iOS',
   platformVer: process.env.APP_PLATFORM_VER || '18.4',
   locale: process.env.APP_LOCALE || 'ru-RU',
